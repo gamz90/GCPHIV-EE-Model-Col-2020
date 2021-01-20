@@ -13,8 +13,7 @@ n_scenario = {'incidence': 'BASE_VALUE', 'base_qaly': 'BASE_VALUE', 'high_test_q
 for x in tqdm(lists['Treatment'].unique()):
     group = lists[lists['Treatment'] == x]['Group'].unique()[0]
     m.parallel_simulation(medication_name=x, group=group, n_simulations=30000, scenario=n_scenario)
-m.export_results()
-analysis = DataProcessing(m.results)
+analysis = DataProcessing(list(lists['Treatment'].unique()))
 analysis.generate_dispersion(language='spa')
 analysis.acceptability_curve(min_value=21088903.3, max_value=100000000, n_steps=100, language='spa')
 print(dt.datetime.now())

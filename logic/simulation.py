@@ -48,7 +48,6 @@ class Model(object):
         self.medications = dict()
         self.leaving_states = ['dead', 'failure', 'adverse_reaction']
         self.adverse_info = pd.read_csv(DIR_INPUT + 'adverse_general.csv')
-        self.results = list()
 
     def load_medication(self, medication_name: str):
         medication_df = pd.read_csv(DIR_INPUT + medication_name + '.csv')
@@ -363,7 +362,7 @@ class Model(object):
         return_list.rename(columns={'index': 'iteration'}, inplace=True)
         return_list.iteration = return_list.iteration+1
         return_list['group'] = group
-        self.results.append(return_list)
+        return_list.to_csv(DIR_OUTPUT + 'results_' + medication_name + '.csv', index=False)
 
     def simulate_change(self, state: dict, adverse_information: dict, scenario: dict):
         medication_name = 'switch_phase'
@@ -451,6 +450,3 @@ class Model(object):
         result_state['qaly'] = qaly_cost['qaly']
         result_state['cost'] = qaly_cost['cost']
         return result_state
-
-    def export_results(self, file_name: str = 'results'):
-        pd.concat(self.results).to_csv(DIR_OUTPUT + file_name + '.csv', index=False)

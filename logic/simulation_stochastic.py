@@ -393,7 +393,7 @@ class Model(object):
         return_list.rename(columns={'index': 'iteration'}, inplace=True)
         return_list.iteration = return_list.iteration + 1
         return_list['group'] = group
-        return_list.to_csv(DIR_OUTPUT + 'results_' + medication_name + '.csv', index=False)
+        return_list.to_csv(DIR_OUTPUT + 'results_s_' + medication_name + '.csv', index=False)
 
     def generate_random(self, n_iterations: int, medication_name: str):
         # Month_death_rate

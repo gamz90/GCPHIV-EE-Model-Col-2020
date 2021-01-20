@@ -14,7 +14,7 @@ n_iterations = 100000
 for x in tqdm(lists['Treatment'].unique()):
     group = lists[lists['Treatment'] == x]['Group'].unique()[0]
     m.parallel_simulation(medication_name=x, group=group, n_simulations=n_iterations)
-analysis = DataProcessing(list(lists['Treatment'].unique()))
+analysis = DataProcessing(name_list = list(lists['Treatment'].unique()), stochastic=True)
 analysis.generate_dispersion(language='spa')
 analysis.acceptability_curve(min_value=21088903.3, max_value=100000000, n_steps=100, language='spa')
 print(dt.datetime.now())

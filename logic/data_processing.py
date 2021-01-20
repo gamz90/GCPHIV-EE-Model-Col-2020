@@ -8,12 +8,14 @@ from tqdm import tqdm
 
 
 class DataProcessing(object):
-    def __init__(self, name_list: list):
+    def __init__(self, name_list: list, stochastic: bool = False):
         result_list = list()
         for name in tqdm(name_list):
-            result_list.append(pd.read_csv(DIR_OUTPUT+'results_'+name+'.csv'))
+            file_name = DIR_OUTPUT+'results_s_'+name+'.csv' if stochastic else DIR_OUTPUT+'results_'+name+'.csv'
+            result_list.append(file_name)
         self.results = pd.concat(result_list)
         self.results.to_csv(DIR_OUTPUT+'consolidate_results.csv', index=False)
+        self.stochastic = stochastic
 
     def generate_dispersion(self, language='eng'):
         results = self.results.copy()
@@ -41,18 +43,25 @@ class DataProcessing(object):
         for i in range(len(names)):
             mark[names[i]] = markers[i % len(markers)]
         sns.set(style="darkgrid")
-        plot = sns.relplot(x=qaly, y=costs, hue=medication_name, data=results, row=group, style=medication_name,
+        sns.relplot(x=qaly, y=costs, hue=medication_name, data=results, row=group, style=medication_name,
                            markers=mark, kind='scatter')
-        plt.savefig(DIR_OUTPUT+"dispersion.png", bbox_inches="tight")
+        if self.stochastic:
+            plt.savefig(DIR_OUTPUT+"dispersion_s.png", bbox_inches="tight")
+        else:
+            plt.savefig(DIR_OUTPUT + "dispersion.png", bbox_inches="tight")
         plt.clf()
         mark = list()
         for i in range(len(results[medication_name].unique())):
             mark.append(markers[i % len(markers)])
         results = results[[medication_name, group, qaly, costs]].groupby([medication_name, group]).mean().reset_index(
             drop=False)
-        plot = sns.relplot(x=qaly, y=costs, hue=medication_name, data=results, style=medication_name, markers=mark,
+        sns.relplot(x=qaly, y=costs, hue=medication_name, data=results, style=medication_name, markers=mark,
                            kind='scatter', legend='full')
-        plt.savefig(DIR_OUTPUT + "ce_plane.png", bbox_inches="tight")
+
+        if self.stochastic:
+            plt.savefig(DIR_OUTPUT + "ce_plane_s.png", bbox_inches="tight")
+        else:
+            plt.savefig(DIR_OUTPUT + "ce_plane.png", bbox_inches="tight")
         plt.clf()
 
     def calculate_net_monetary_benefit(self, threshold: float, result_list: list):
@@ -97,7 +106,10 @@ class DataProcessing(object):
 
         df.to_csv(DIR_OUTPUT+name+'.csv', index=False)
         sns.set(style="darkgrid")
-        plot = sns.relplot(x=threshold, y=probability, hue=medication_name, data=df, row=group, style=medication_name,
+        sns.relplot(x=threshold, y=probability, hue=medication_name, data=df, row=group, style=medication_name,
                            kind='line')
-        plt.savefig(DIR_OUTPUT + "acceptability_curve.png", bbox_inches="tight")
+        if self.stochastic:
+            plt.savefig(DIR_OUTPUT + "acceptability_curve_s.png", bbox_inches="tight")
+        else:
+            plt.savefig(DIR_OUTPUT + "acceptability_curve.png", bbox_inches="tight")
         plt.clf()
