@@ -1,0 +1,9 @@
+TYPE,NAME,PROBABILITY
+C,insomio, 0.003 
+A,iam, 0.000 
+A,intento_suicidio, 0.000 
+C,depresion_severa, 0.002 
+C,hiperglicemia , 0.001 
+C,colesterol_elevado, 0.005 
+C,toxicidad_renal, 0.001 
+C,toxicidad_hepatica, 0.002 

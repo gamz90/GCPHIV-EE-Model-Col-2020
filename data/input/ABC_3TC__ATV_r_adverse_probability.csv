@@ -1,0 +1,5 @@
+TYPE,NAME,PROBABILITY
+C,colesterol_elevado,0.004010809
+C,depresion,0.001356201
+C,toxicidad_hepatica,0.003889822
+
