@@ -62,16 +62,19 @@ class Model(object):
         except:
             self.medications[medication_name]['adverse_probability'] = None
 
-    def initial_state(self, value: str = 'BASE_VALUE'):
-        n_tests = math.floor(random.random() * 3)
-        if n_tests == 3:
-            n_tests -= 1
+    def initial_state(self, efficiency: float, value: str = 'BASE_VALUE'):
+        if random.random() < efficiency:
+            n_tests = 0
+        else:
+            n_tests = 1
         random_value = random.random()
         for age in self.age_groups:
             for sex in self.sexes:
                 random_value -= self.general_info['values']['incidence'][age][sex][value]
-                if random_value < 0.0:
+                if random_value <= 0.0:
                     month_age = int(age[-2:]) * 60 + math.floor(random.random() * 60)
+                    if month_age < 18*12:
+                        month_age = 18*12
                     return {'tests': n_tests, 'chronic': 0, 'acute': False, 'age': month_age,
                             'sex': sex, 'treatment': 2}
         month_age = int(self.age_groups[len(self.age_groups) - 1][-2:]) * 60 + math.floor(random.random() * 60)
@@ -119,9 +122,12 @@ class Model(object):
         return {'chronic': chronic, 'acute': acute}
 
     def simulate_medication(self, medication_name: str, consolidated_results: list, scenario: dict,
-                            adverse_information: dict):
+                            adverse_information: dict, inflation_rate: float = 1.0, project_switch: bool = False):
         states = list()
-        state = self.initial_state(value=scenario.get('incidence', 'BASE_VALUE'))
+        efficiency_dict = self.medications[medication_name]['values']['efficiency']
+        efficiency = efficiency_dict[list(efficiency_dict.keys())[0]][scenario.get('efficiency', 'BASE_VALUE')]
+        efficiency = efficiency**2
+        state = self.initial_state(efficiency=efficiency, value=scenario.get('incidence', 'BASE_VALUE'))
         age_group = math.floor(state['age'] / 60)
         age_group = 'e' + str(min(age_group, 16)) if age_group >= 10 else 'e0' + str(age_group)
         qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group, chronic=0,
@@ -132,20 +138,27 @@ class Model(object):
         states.append(state)
         while states[len(states) - 1]['tests'] not in self.leaving_states:
             states.append(self.simulate_step(state=states[len(states) - 1], medication_name=medication_name,
-                                             scenario=scenario, adverse_information=adverse_information))
+                                             scenario=scenario, adverse_information=adverse_information,
+                                             inflation_rate=inflation_rate))
         change_reason = states[len(states)-1]['tests']
         if change_reason != 'dead':
             states[len(states)-1]['cost'] += self.general_info['values']['switch_cost']['ALL'][
                 'ALL'][scenario.get('switch_cost', 'BASE_VALUE')]
-#        while states[len(states)-1]['tests'] != 'dead':
-#            states.append(self.simulate_change(state=states[len(states)-1], scenario=scenario,
-#                                               adverse_information=adverse_information))
+            states[len(states) - 1]['cost'] /= (inflation_rate**states[len(states) - 1]['treatment'])
+            states[len(states) - 1]['qaly'] *= self.general_info['values']['switch_qaly']['ALL'][
+                'ALL'][scenario.get('switch_qaly', 'BASE_VALUE')] / \
+                                               (inflation_rate**states[len(states) - 1]['treatment'])
+        if project_switch:
+            while states[len(states)-1]['tests'] != 'dead':
+                states.append(self.simulate_change(state=states[len(states)-1], scenario=scenario,
+                                                   adverse_information=adverse_information,
+                                                   inflation_rate=inflation_rate))
         states = pd.DataFrame.from_dict(data=states, orient='columns')
         states['exit_reason'] = change_reason
-        states.set_index(keys='treatment', inplace=True)
         consolidated_results.append(states)
 
-    def simulate_step(self, state: dict, medication_name: str, adverse_information: dict, scenario: dict):
+    def simulate_step(self, state: dict, medication_name: str, adverse_information: dict, scenario: dict,
+                      inflation_rate: float = 1.0):
         result_state = state.copy()
         age_group = math.floor(state['age'] / 60)
         age_group = 'e' + str(min(age_group, 16)) if age_group >= 10 else 'e0' + str(age_group)
@@ -163,8 +176,8 @@ class Model(object):
                                                  acute=result_state['acute'], scenario=scenario,
                                                  step_length=time_for_step, adverse_information=adverse_information,
                                                  medication_name=medication_name)
-            result_state['qaly'] = qaly_cost['qaly']
-            result_state['cost'] = qaly_cost['cost']
+            result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+            result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
             return result_state
         if state['chronic'] == 0:  # Chronic event can occur
             occurrence = 1 - (1 - adverse_information['chronic']['probability']) ** time_for_step
@@ -183,8 +196,8 @@ class Model(object):
                                                          step_length=time_for_step,
                                                          adverse_information=adverse_information,
                                                          medication_name=medication_name)
-                    result_state['qaly'] = qaly_cost['qaly']
-                    result_state['cost'] = qaly_cost['cost']
+                    result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                    result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                     return result_state
                 else:
                     # Change due to chronic reaction
@@ -200,8 +213,8 @@ class Model(object):
                                                              step_length=time_for_step,
                                                              adverse_information=adverse_information,
                                                              medication_name=medication_name)
-                        result_state['qaly'] = qaly_cost['qaly']
-                        result_state['cost'] = qaly_cost['cost']
+                        result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                        result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                         return result_state
         else:
             death = 1-(1 - adverse_information['chronic']['Chronic_Death'])**time_for_step
@@ -214,8 +227,8 @@ class Model(object):
                                                      acute=result_state['acute'], scenario=scenario,
                                                      step_length=time_for_step, adverse_information=adverse_information,
                                                      medication_name=medication_name)
-                result_state['qaly'] = qaly_cost['qaly']
-                result_state['cost'] = qaly_cost['cost']
+                result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                 return result_state
             else:
                 change = 1 - (1 - adverse_information['chronic']['Chronic_Change'])**time_for_step
@@ -229,8 +242,8 @@ class Model(object):
                                                          step_length=time_for_step,
                                                          adverse_information=adverse_information,
                                                          medication_name=medication_name)
-                    result_state['qaly'] = qaly_cost['qaly']
-                    result_state['cost'] = qaly_cost['cost']
+                    result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                    result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                     return result_state
         if (not state['acute']) and result_state['chronic'] == state['chronic']:  # Acute event can occur
             occurrence = 1 - (1 - adverse_information['acute']['probability']) ** time_for_step
@@ -247,8 +260,8 @@ class Model(object):
                                                          step_length=time_for_step,
                                                          adverse_information=adverse_information,
                                                          medication_name=medication_name)
-                    result_state['qaly'] = qaly_cost['qaly']
-                    result_state['cost'] = qaly_cost['cost']
+                    result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                    result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                     return result_state
                 else:
                     # Change due to acute reaction
@@ -262,8 +275,8 @@ class Model(object):
                                                              step_length=time_for_step,
                                                              adverse_information=adverse_information,
                                                              medication_name=medication_name)
-                        result_state['qaly'] = qaly_cost['qaly']
-                        result_state['cost'] = qaly_cost['cost']
+                        result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                        result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                         return result_state
         result_state['age'] += time_for_step
         result_state['treatment'] += time_for_step
@@ -274,8 +287,8 @@ class Model(object):
                 if int(ef) <= int(state['treatment']):
                     efficiency = efficiency_dict[ef][scenario.get('efficiency', 'BASE_VALUE')]
         else:
-            efficiency = efficiency_dict['ALL'][scenario.get('efficiency', 'BASE_VALUE')]
-        efficiency = 1 - (1-efficiency)**time_for_step
+            efficiency = efficiency_dict[list(efficiency_dict.keys())[0]][scenario.get('efficiency', 'BASE_VALUE')]
+        efficiency = efficiency**time_for_step
         result_state['tests'] = 0 if random.random() < efficiency else result_state['tests'] + 1
 
         if result_state['tests'] > 2 or (result_state['tests'] == 2):
@@ -291,8 +304,8 @@ class Model(object):
                                              acute=result_state['acute'], scenario=scenario,
                                              step_length=time_for_step, adverse_information=adverse_information,
                                              medication_name=medication_name)
-        result_state['qaly'] = qaly_cost['qaly']
-        result_state['cost'] = qaly_cost['cost']
+        result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+        result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
         return result_state
 
     def calculate_qaly_cost(self, viral_charge: bool, age: str, chronic: int, acute: bool, step_length: int,
@@ -308,7 +321,7 @@ class Model(object):
         :param scenario: scenario of chosen information.
         :return: dictionary with associated qaly value and cost
         """
-        qaly = self.general_info['values']['base_qaly'][age]['ALL'][scenario.get('base_qaly', 'BASE_VALUE')]
+        qaly = self.general_info['values']['base_qaly'][age]['ALL'][scenario.get('base_qaly', 'BASE_VALUE')]/12
         cost = self.medications[medication_name]['values']['test_cost']['ALL'][scenario.get('test_cost', 'BASE_VALUE')]
         if viral_charge:
             qaly *= self.general_info['values']['high_test_qaly']['ALL']['ALL'][scenario.get('high_test_qaly',
@@ -337,24 +350,26 @@ class Model(object):
         return {'qaly': qaly, 'cost': cost}
 
     def parallel_simulation(self, medication_name: str, scenario: dict, group: str = 'Unique',
-                            n_simulations: int = 1000):
+                            n_simulations: int = 1000, inflation_rate: tuple = ('None', 1.0), project_switch: bool =
+                            False):
         if medication_name not in self.medications.keys():
             self.load_medication(medication_name)
         if 'switch_phase' not in self.medications.keys():
             self.load_medication('switch_phase')
         adverse_information = self.calculate_probabilities(medication_name=medication_name, scenario=scenario)
-        cores = multiprocessing.cpu_count() - 1
+        cores = multiprocessing.cpu_count()*3
         manager = multiprocessing.Manager()
         return_list = manager.list()
         args = list()
         for i in range(n_simulations):
-            args.append((medication_name, return_list, scenario, adverse_information))
+            args.append((medication_name, return_list, scenario, adverse_information, inflation_rate[1], project_switch))
         with multiprocessing.Pool(processes=cores) as pool:
             pool.starmap(self.simulate_medication, args)
         result_list = list()
         for i in range(n_simulations):
             df = return_list[i]
-            result_list.append({'medication_name': medication_name, 'qaly': df.qaly.sum(), 'costs': df.cost.sum(),
+            result_list.append({'medication_name': medication_name, 'qaly': df.qaly.sum(),
+                                'treatment': df.treatment.max(), 'costs': df.cost.sum(),
                                 'acute_events': len(df[df.acute]), 'chronic_event': df.chronic.max(),
                                 'exit_reason': df.exit_reason.unique()[0]})
         return_list = pd.DataFrame(result_list)
@@ -362,9 +377,12 @@ class Model(object):
         return_list.rename(columns={'index': 'iteration'}, inplace=True)
         return_list.iteration = return_list.iteration+1
         return_list['group'] = group
-        return_list.to_csv(DIR_OUTPUT + 'results_' + medication_name + '.csv', index=False)
+        return_list['discount_rate'] = inflation_rate[0]
+        return_list['switch_cost'] = scenario['switch_cost']
+        return_list.to_csv(DIR_OUTPUT + 'results_' + medication_name + '_'+inflation_rate[0] + '_' +
+                           scenario['switch_cost'] + '.csv', index=False)
 
-    def simulate_change(self, state: dict, adverse_information: dict, scenario: dict):
+    def simulate_change(self, state: dict, adverse_information: dict, scenario: dict, inflation_rate: float = 1.0):
         medication_name = 'switch_phase'
         result_state = state.copy()
         age_group = math.floor(state['age'] / 60)
@@ -384,8 +402,8 @@ class Model(object):
                                                  step_length=time_for_step, adverse_information=adverse_information,
                                                  medication_name=medication_name)
             result_state['qaly'] = qaly_cost['qaly']*self.general_info['values']['switch_qaly']['ALL']['ALL'][
-                scenario.get('base_qaly', 'BASE_VALUE')]
-            result_state['cost'] = qaly_cost['cost']
+                scenario.get('base_qaly', 'BASE_VALUE')]/(inflation_rate**state['treatment'])
+            result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
             return result_state
 
         if state['chronic'] == 0:  # Chronic event can occur
@@ -405,8 +423,8 @@ class Model(object):
                                                          step_length=time_for_step,
                                                          adverse_information=adverse_information,
                                                          medication_name=medication_name)
-                    result_state['qaly'] = qaly_cost['qaly']
-                    result_state['cost'] = qaly_cost['cost']
+                    result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                    result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                     return result_state
         else:
             death = 1 - (1 - adverse_information['chronic']['Chronic_Death']) ** time_for_step
@@ -419,8 +437,8 @@ class Model(object):
                                                      acute=result_state['acute'], scenario=scenario,
                                                      step_length=time_for_step, adverse_information=adverse_information,
                                                      medication_name=medication_name)
-                result_state['qaly'] = qaly_cost['qaly']
-                result_state['cost'] = qaly_cost['cost']
+                result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                 return result_state
         if (not state['acute']) and result_state['chronic'] == state['chronic']:  # Acute event can occur
             occurrence = 1 - (1 - adverse_information['acute']['probability']) ** time_for_step
@@ -437,8 +455,8 @@ class Model(object):
                                                          step_length=time_for_step,
                                                          adverse_information=adverse_information,
                                                          medication_name=medication_name)
-                    result_state['qaly'] = qaly_cost['qaly']
-                    result_state['cost'] = qaly_cost['cost']
+                    result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                    result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                     return result_state
         result_state['age'] += time_for_step
         result_state['treatment'] += time_for_step
@@ -447,6 +465,6 @@ class Model(object):
                                              acute=result_state['acute'], scenario=scenario,
                                              step_length=time_for_step, adverse_information=adverse_information,
                                              medication_name=medication_name)
-        result_state['qaly'] = qaly_cost['qaly']
-        result_state['cost'] = qaly_cost['cost']
+        result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+        result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
         return result_state

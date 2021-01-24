@@ -85,7 +85,7 @@ class Model(object):
         :param main_medication: boolean recording if the study is a patient in main phase or after switch
         :return: dictionary with associated qaly value and cost
         """
-        qaly = self.random_values['base_qaly'][age][i]
+        qaly = self.random_values['base_qaly'][age][i]/12
         if np.isnan(qaly):
             print('base_qaly')
         cost = self.random_values['test_cost'][i]
@@ -142,7 +142,7 @@ class Model(object):
         return {'tests': n_tests, 'chronic': 0, 'acute': False, 'age': month_age,
                 'sex': self.sexes[len(self.sexes) - 1], 'treatment': 2}
 
-    def simulate_step(self, state: dict, i: int):
+    def simulate_step(self, state: dict, i: int, inflation_rate: float = 1.0):
         result_state = state.copy()
         age_group = math.floor(state['age'] / 60)
         age_group = 'e' + str(min(age_group, 16)) if age_group >= 10 else 'e0' + str(age_group)
@@ -157,8 +157,8 @@ class Model(object):
             qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                  chronic=(state['chronic'] + result_state['chronic']),
                                                  acute=result_state['acute'], i=i, step_length=time_for_step)
-            result_state['qaly'] = float(qaly_cost['qaly'])
-            result_state['cost'] = float(qaly_cost['cost'])
+            result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
+            result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
             return result_state
         #  Chronic event can occur
         if state['chronic'] == 0:
@@ -174,8 +174,8 @@ class Model(object):
                                                          age=age_group,
                                                          chronic=(state['chronic'] + result_state['chronic']),
                                                          acute=result_state['acute'], i=i, step_length=time_for_step)
-                    result_state['qaly'] = float(qaly_cost['qaly'])
-                    result_state['cost'] = float(qaly_cost['cost'])
+                    result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
+                    result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
                     return result_state
                 else:
                     # Immediate change due to chronic reaction
@@ -187,8 +187,8 @@ class Model(object):
                                                              chronic=(state['chronic'] + result_state['chronic']),
                                                              acute=result_state['acute'], i=i,
                                                              step_length=time_for_step)
-                        result_state['qaly'] = float(qaly_cost['qaly'])
-                        result_state['cost'] = float(qaly_cost['cost'])
+                        result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
+                        result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
                         return result_state
         else:
             death = 1 - (1 - self.random_values['adverse']['chronic']['Chronic_Death'][i]) ** time_for_step
@@ -199,8 +199,8 @@ class Model(object):
                 qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                 chronic=(state['chronic'] + result_state['chronic']),
                                                 acute=result_state['acute'], i=i, step_length=time_for_step)
-                result_state['qaly'] = float(qaly_cost['qaly'])
-                result_state['cost'] = float(qaly_cost['cost'])
+                result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
+                result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
                 return result_state
             else:
                 change = 1 - (1 - self.random_values['adverse']['chronic']['Chronic_Change'][i]) ** time_for_step
@@ -211,8 +211,8 @@ class Model(object):
                     qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                          chronic=(state['chronic'] + result_state['chronic']),
                                                          acute=result_state['acute'], i=i, step_length=time_for_step)
-                    result_state['qaly'] = float(qaly_cost['qaly'])
-                    result_state['cost'] = float(qaly_cost['cost'])
+                    result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
+                    result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
                     return result_state
         if (not state['acute']) and result_state['chronic'] == state['chronic']:  # Acute event can occur
             occurrence = 1 - (1 - self.random_values['adverse']['acute']['probability'][i]) ** time_for_step
@@ -226,8 +226,8 @@ class Model(object):
                     qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                          chronic=(state['chronic'] + result_state['chronic']),
                                                          acute=result_state['acute'], i=i, step_length=time_for_step)
-                    result_state['qaly'] = float(qaly_cost['qaly'])
-                    result_state['cost'] = float(qaly_cost['cost'])
+                    result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
+                    result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
                     return result_state
                 else:
                     # Change due to acute reaction
@@ -239,8 +239,8 @@ class Model(object):
                                                              chronic=(state['chronic'] + result_state['chronic']),
                                                              acute=result_state['acute'], i=i,
                                                              step_length=time_for_step)
-                        result_state['qaly'] = float(qaly_cost['qaly'])
-                        result_state['cost'] = float(qaly_cost['cost'])
+                        result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
+                        result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
                         return result_state
         result_state['age'] += time_for_step
         result_state['treatment'] += time_for_step
@@ -266,11 +266,11 @@ class Model(object):
                                                  acute=result_state['acute'], i=i, step_length=time_for_step)
         if np.isnan(qaly_cost['qaly']):
             print(state, i, qaly_cost['qaly'], qaly_cost)
-        result_state['qaly'] = float(qaly_cost['qaly'])
-        result_state['cost'] = float(qaly_cost['cost'])
+        result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
+        result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
         return result_state
 
-    def simulate_change(self, state: dict, i: int):
+    def simulate_change(self, state: dict, i: int, inflation_rate: float = 1.0):
         result_state = state.copy()
         age_group = math.floor(state['age'] / 60)
         age_group = 'e' + str(min(age_group, 16)) if age_group >= 10 else 'e0' + str(age_group)
@@ -286,8 +286,9 @@ class Model(object):
                                                  chronic=(state['chronic'] + result_state['chronic']),
                                                  acute=result_state['acute'], i=i, step_length=time_for_step,
                                                  main_medication=False)
-            result_state['qaly'] = qaly_cost['qaly'] * self.random_values['switch_qaly'][i]
-            result_state['cost'] = qaly_cost['cost']
+            result_state['qaly'] = qaly_cost['qaly'] * self.random_values['switch_qaly'][i]/(
+                    inflation_rate**state['treatment'])
+            result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
             return result_state
         if state['chronic'] == 0:  # Chronic event can occur
             occurrence = 1 - (1 - self.random_values['switch_phase']['chronic']['probability'][i]) ** time_for_step
@@ -302,8 +303,8 @@ class Model(object):
                                                          chronic=(state['chronic'] + result_state['chronic']),
                                                          acute=result_state['acute'], i=i, step_length=time_for_step,
                                                          main_medication=False)
-                    result_state['qaly'] = qaly_cost['qaly']
-                    result_state['cost'] = qaly_cost['cost']
+                    result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                    result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                     return result_state
         else:
             death = 1 - (1 - self.random_values['switch_phase']['chronic']['Chronic_Death'][i]) ** time_for_step
@@ -315,8 +316,8 @@ class Model(object):
                                                      chronic=(state['chronic'] + result_state['chronic']),
                                                      acute=result_state['acute'], i=i, step_length=time_for_step,
                                                      main_medication=False)
-                result_state['qaly'] = qaly_cost['qaly']
-                result_state['cost'] = qaly_cost['cost']
+                result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                 return result_state
         if (not state['acute']) and result_state['chronic'] == state['chronic']:  # Acute event can occur
             occurrence = 1 - (1 - self.random_values['switch_phase']['acute']['probability'][i]) ** time_for_step
@@ -331,8 +332,8 @@ class Model(object):
                                                          chronic=(state['chronic'] + result_state['chronic']),
                                                          acute=result_state['acute'], i=i, step_length=time_for_step,
                                                          main_medication=False)
-                    result_state['qaly'] = qaly_cost['qaly']
-                    result_state['cost'] = qaly_cost['cost']
+                    result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+                    result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
                     return result_state
         result_state['age'] += time_for_step
         result_state['treatment'] += time_for_step
@@ -340,11 +341,12 @@ class Model(object):
                                              chronic=(state['chronic'] + result_state['chronic']),
                                              acute=result_state['acute'], i=i, step_length=time_for_step,
                                              main_medication=False)
-        result_state['qaly'] = qaly_cost['qaly']
-        result_state['cost'] = qaly_cost['cost']
+        result_state['qaly'] = qaly_cost['qaly']/(inflation_rate**state['treatment'])
+        result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
         return result_state
 
-    def simulate_medication(self, result_list: list, iteration: int, project_switch: bool = False):
+    def simulate_medication(self, result_list: list, iteration: int, inflation_rate: float,
+                            project_switch: bool = False):
         states = list()
         state = self.initial_state()
         age_group = math.floor(state['age'] / 60)
@@ -355,37 +357,40 @@ class Model(object):
         state['cost'] = float(qaly_cost['cost'])
         states.append(state)
         while states[len(states) - 1]['tests'] not in self.leaving_states:
-            states.append(self.simulate_step(state=states[len(states) - 1], i=iteration))
+            states.append(self.simulate_step(state=states[len(states) - 1], i=iteration, inflation_rate=inflation_rate))
         change_reason = states[len(states) - 1]['tests']
         if change_reason != 'dead':
             states[len(states) - 1]['cost'] += self.random_values['switch_cost'][iteration]
-            states[len(states) - 1]['qaly'] *= self.random_values['switch_qaly'][iteration]
-        #if project_switch:
-        #    while states[len(states) - 1]['tests'] != 'dead':
-        #        states.append(self.simulate_change(state=states[len(states) - 1], i=iteration))
+            states[len(states) - 1]['qaly'] *= self.random_values['switch_qaly'][iteration] /\
+                                               (inflation_rate**states[len(states) - 1]['treatment'])
+            states[len(states) - 1]['cost'] /= inflation_rate**states[len(states) - 1]['treatment']
+        if project_switch:
+            while states[len(states) - 1]['tests'] != 'dead':
+                states.append(self.simulate_change(state=states[len(states) - 1], i=iteration))
         states = pd.DataFrame.from_dict(data=states, orient='columns')
         states['exit_reason'] = change_reason
-        states.set_index(keys='treatment', inplace=True)
         result_list.append(states)
 
-    def parallel_simulation(self, medication_name: str, group: str = 'Unique', n_simulations: int = 1000):
+    def parallel_simulation(self, medication_name: str, group: str = 'Unique', n_simulations: int = 1000,
+                            inflation_rate: float = 1.0, project_switch: bool = False):
         if medication_name not in self.medications.keys():
             self.load_medication(medication_name)
         if 'switch_phase' not in self.medications.keys():
             self.load_medication('switch_phase')
         self.generate_random(n_iterations=n_simulations, medication_name=medication_name)
-        cores = multiprocessing.cpu_count()
+        cores = multiprocessing.cpu_count()*3
         manager = multiprocessing.Manager()
         return_list = manager.list()
         args = list()
         for i in range(n_simulations):
-            args.append((return_list, i))
+            args.append((return_list, i, inflation_rate, project_switch))
         with multiprocessing.Pool(processes=cores) as pool:
             pool.starmap(self.simulate_medication, args)
         result_list = list()
         for i in range(n_simulations):
             df = return_list[i]
-            result_list.append({'medication_name': medication_name, 'qaly': df.qaly.sum(), 'costs': df.cost.sum(),
+            result_list.append({'medication_name': medication_name, 'qaly': df.qaly.sum(),
+                                'treatment': df.treatment.max(), 'costs': df.cost.sum(),
                                 'acute_events': len(df[df.acute]), 'chronic_event': df.chronic.max(),
                                 'exit_reason': df.exit_reason.unique()[0]})
         return_list = pd.DataFrame(result_list)
@@ -393,6 +398,7 @@ class Model(object):
         return_list.rename(columns={'index': 'iteration'}, inplace=True)
         return_list.iteration = return_list.iteration + 1
         return_list['group'] = group
+        return_list['discount_rate'] = '5'
         return_list.to_csv(DIR_OUTPUT + 'results_s_' + medication_name + '.csv', index=False)
 
     def generate_random(self, n_iterations: int, medication_name: str):
@@ -464,7 +470,7 @@ class Model(object):
                             acute[k] += weights[cond] * generate_triangular(values=dict(
                                 adverse_df[adverse_df['PROBABILITY'] == k].mean()), n_iterations=n_iterations)
                         except Exception as e:
-                            print(cond, k, adverse_df[adverse_df['PROBABILITY'] == k].mean(), acute[k],e)
+                            print(cond, k, adverse_df[adverse_df['PROBABILITY'] == k].mean(), acute[k], e)
             acute['probability'] = probability*np.ones(n_iterations)
         else:
             chronic['probability'] = np.zeros(n_iterations)

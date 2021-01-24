@@ -2,7 +2,7 @@ TYPE,NAME,PROBABILITY
 C,colesterol_elevado,0.005538918
 C,depresion,0.002140093
 A,iam,0.000550224
-C,insomio,0.005766959
+C,insomnio,0.005766959
 A,intento_suicidio,0
 C,toxicidad_hepatica,0.00148835
 C,toxicidad_renal,0.000550224
