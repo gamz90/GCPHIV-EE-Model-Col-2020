@@ -84,8 +84,7 @@ class Model(object):
 
     def calculate_probabilities(self, medication_name: str, scenario: dict):
         probabilities = self.medications[medication_name]['adverse_probability']
-        chronic = {'Immediate_Death': 0, 'Immediate_Change': 0, 'Immediate_QALY': 0, 'Immediate_Cost': 0,
-                  'Chronic_Death': 0, 'Chronic_Change': 0, 'Chronic_QALY': 0, 'Chronic_Cost': 0}
+        chronic = {'Immediate_Death': 0, 'Immediate_Change': 0, 'Immediate_QALY': 0, 'Immediate_Cost': 0, 'Chronic_Death': 0, 'Chronic_Change': 0, 'Chronic_QALY': 0, 'Chronic_Cost': 0}
         acute = {'Immediate_Death': 0, 'Immediate_Change': 0, 'Immediate_QALY': 0, 'Immediate_Cost': 0}
         if probabilities is not None:
             chronic_df = probabilities[probabilities['TYPE'] == 'C']
@@ -147,9 +146,7 @@ class Model(object):
                 'ALL'][scenario.get('switch_cost', 'BASE_VALUE')]
             if inflation_rate > 0.0:
                 states[len(states) - 1]['cost'] /= (inflation_rate**states[len(states) - 1]['treatment'])
-                states[len(states) - 1]['qaly'] *= self.general_info['values']['switch_qaly']['ALL'][
-                                                       'ALL'][scenario.get('switch_qaly', 'BASE_VALUE')] / \
-                                                   (inflation_rate**states[len(states) - 1]['treatment'])
+                states[len(states) - 1]['qaly'] *= self.general_info['values']['switch_qaly']['ALL']['ALL'][scenario.get('switch_qaly', 'BASE_VALUE')] / (inflation_rate**states[len(states) - 1]['treatment'])
         if project_switch:
             while states[len(states)-1]['tests'] != 'dead':
                 states.append(self.simulate_change(state=states[len(states)-1], scenario=scenario,
