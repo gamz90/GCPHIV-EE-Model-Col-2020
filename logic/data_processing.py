@@ -5,6 +5,7 @@ from root import DIR_OUTPUT
 import multiprocessing
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import datetime as dt
 
 
 class DataProcessing(object):
@@ -46,7 +47,7 @@ class DataProcessing(object):
         self.switch_cost = switch_cost
         self.pregnancy_model = pregnancy_model
 
-    def generate_dispersion(self, language='eng'):
+    def generate_dispersion(self, language: str = 'eng', n_iterations: int = 50000):
         results = self.results.copy()
         qaly = 'QALY'
         costs = 'Costs'
@@ -90,7 +91,7 @@ class DataProcessing(object):
         mark = list()
         for i in range(len(results[medication_name].unique())):
             mark.append(markers[i % len(markers)])
-        size = results.iteration.max()*4 if discount_rate else results.iteration.max()
+        size = n_iterations*4 if discount_rate else n_iterations
         r2 = results[[medication_name, exit_reason, 'iteration']].groupby([medication_name, exit_reason]).count()/size
         r2.reset_index(drop=False, inplace=True)
         r2 = r2.pivot_table('iteration', [medication_name], exit_reason)
@@ -98,6 +99,7 @@ class DataProcessing(object):
         results = results[[discount_rate, medication_name, group, qaly, costs, acute_events, chronic_events]].groupby([
             discount_rate, medication_name, group]).mean().reset_index(drop=False)
         results = results.merge(r2, left_on=medication_name, right_on=medication_name, suffixes=(None, '_percent'))
+        print(results.head())
         sns.relplot(x=qaly, y=costs, hue=medication_name, data=results, row=discount_rate,  style=medication_name,
                     markers=mark, kind='scatter', legend='full')
         file_name = DIR_OUTPUT + "average_results"
@@ -117,13 +119,12 @@ class DataProcessing(object):
         plt.savefig(graph_name, bbox_inches="tight")
         plt.clf()
 
-    def calculate_net_monetary_benefit(self, threshold: float, result_list: list):
+    def calculate_net_monetary_benefit(self, threshold: float, result_list: list, n_iterations: int):
         df = self.results[['medication_name', 'group', 'iteration', 'qaly', 'costs', 'discount_rate']].copy()
         df['nmb'] = df['qaly']*threshold - df['costs']
-        max_df = df[['iteration', 'nmb']].groupby('iteration').max()
+        max_df = df[['discount_rate', 'iteration', 'nmb']].groupby(['discount_rate', 'iteration']).max()
         max_df.reset_index(drop=False, inplace=True)
-        n_iterations = max_df['iteration'].max()
-        df = df.merge(max_df, left_on='iteration', right_on='iteration', suffixes=(None, '_max'))
+        df = df.merge(max_df, left_on=['iteration', 'discount_rate'], right_on=['iteration', 'discount_rate'], suffixes=(None, '_max'))
         del max_df
         df['is_best'] = np.where(df['nmb'] == df['nmb_max'], 1, 0)
         df = df[['medication_name', 'group', 'is_best', 'discount_rate']].groupby([
@@ -132,17 +133,20 @@ class DataProcessing(object):
         df['threshold'] = threshold
         result_list.append(df)
 
-    def acceptability_curve(self, min_value: float, max_value: float, n_steps: int = 1000, language='eng'):
-        step_size = (max_value-min_value)/(n_steps-1)
+    def acceptability_curve(self, min_value: float, max_value: float, n_steps: int = 1000, language='eng', n_iterations: int = 50000):
+        print('Calculations starting - Please hold the use of the computer until it finishes', dt.datetime.now())
+
         cores = multiprocessing.cpu_count()
-        manager = multiprocessing.Manager()
-        acceptability_list = manager.list()
-        args = list()
-        for i in range(n_steps):
-            args.append((min_value+step_size*i, acceptability_list))
-        with multiprocessing.Pool(processes=cores) as pool:
-            pool.starmap(self.calculate_net_monetary_benefit, args)
+        ideal_steps = cores
+        while ideal_steps < n_steps:
+            ideal_steps += cores
+        step_size = (max_value - min_value) / (ideal_steps - 1)
+        acceptability_list = list()
+        for i in tqdm(range(ideal_steps)):
+            self.calculate_net_monetary_benefit(min_value+step_size*i, acceptability_list, n_iterations)
+        print('Consolidating information', dt.datetime.now())
         df = pd.concat(acceptability_list)
+        print('Starting graph generation', dt.datetime.now())
         medication_name = 'Therapy'
         threshold = 'Threshold'
         probability = 'Probability'
@@ -177,3 +181,4 @@ class DataProcessing(object):
                     style=medication_name, kind='line')
         plt.savefig(graph_name, bbox_inches="tight")
         plt.clf()
+        print('Aceptability curve generated')

@@ -1,12 +1,11 @@
 import pandas as pd
 from logic.simulation import Model
-from logic.simulation_stochastic import Model as StochasticModel
+from logic.simulation_stochastic import Model as DModel
 from logic.data_processing import DataProcessing
 from root import DIR_INPUT
 import datetime as dt
-from tqdm import tqdm
+import multiprocessing
 
-m = Model()
 print(dt.datetime.now())
 lists = pd.read_csv(DIR_INPUT+'Esquemas.csv')
 n_scenario = {'incidence': 'BASE_VALUE', 'base_qaly': 'BASE_VALUE', 'high_test_qaly': 'BASE_VALUE',
@@ -14,24 +13,45 @@ n_scenario = {'incidence': 'BASE_VALUE', 'base_qaly': 'BASE_VALUE', 'high_test_q
 n_iterations = 50000
 ac_min_value = 21088903.3
 ac_max_value = 100000000
-inflation_rates = {'0': 0, '3.5': 0.00287089871907664, '5': 0.00407412378364835, '12': 0.00948879293458305}
+inflation_rates = {'0': 0.0, '3.5': 0.00287089871907664, '5': 0.00407412378364835, '12': 0.00948879293458305}
 tuple_list = list()
-for x in lists['Treatment'].unique():
+cores = multiprocessing.cpu_count()
+treatment_list = list(lists['Treatment'].unique())
+m = Model()
+for x in treatment_list:
     for inflation_rate in inflation_rates:
+        ir = (inflation_rate, inflation_rates[inflation_rate])
         for scenario in [{'switch_cost': 'BASE_VALUE'}, {'switch_cost': 'INF_VALUE'}, {'switch_cost': 'SUP_VALUE'}]:
-            tuple_list.append((x, inflation_rate, scenario))
-for new_tuple in tqdm(tuple_list):
-    x, inflation_rate, scenario = new_tuple
-    print('\n', x, inflation_rate, scenario, dt.datetime.now())
-    group = lists[lists['Treatment'] == x]['Group'].unique()[0]
-    m.parallel_simulation(medication_name=x, group=group, n_simulations=n_iterations, scenario=scenario,
-                                  inflation_rate=(inflation_rate, 1+inflation_rates[inflation_rate]))
+            group = lists[lists['Treatment'] == x]['Group'].unique()[0]
+            tuple_list.append((x, scenario, group, n_iterations, ir, False))
+with multiprocessing.Pool(processes=1) as pool:
+    pool.starmap(m.parallel_simulation, tuple_list)
+del m
+
 for scenario in [{'switch_cost': 'BASE_VALUE'}, {'switch_cost': 'INF_VALUE'}, {'switch_cost': 'SUP_VALUE'}]:
     print(scenario, dt.datetime.now())
     analysis = DataProcessing(name_list=list(lists['Treatment'].unique()), stochastic=False, discount_rate=True,
                               switch_cost=scenario['switch_cost'])
     print(dt.datetime.now())
-    analysis.generate_dispersion(language='spa')
+    analysis.acceptability_curve(min_value=ac_min_value, max_value=ac_max_value, n_steps=100, language='spa', n_iterations=n_iterations)
     print(dt.datetime.now())
-    analysis.acceptability_curve(min_value=ac_min_value, max_value=ac_max_value, n_steps=100, language='spa')
+    analysis.generate_dispersion(language='spa', n_iterations=n_iterations)
+    del analysis
 print(dt.datetime.now())
+
+#m = DModel()
+#tuple_list = list()
+#for x in lists['Treatment'].unique():
+#    group = lists[lists['Treatment'] == x]['Group'].unique()[0]
+#    tuple_list.append((x, group, n_iterations, (1+inflation_rates['5']), False))
+#
+#with multiprocessing.Pool(processes=cores) as pool:
+#    pool.starmap(m.parallel_simulation, tuple_list)
+#del m
+#print(dt.datetime.now())
+#analysis = DataProcessing(name_list=list(lists['Treatment'].unique()), stochastic=True)
+#print(dt.datetime.now())
+#analysis.generate_dispersion(language='spa', n_iterations=n_iterations)
+#print(dt.datetime.now())
+#analysis.acceptability_curve(min_value=21088903.3, max_value=100000000, n_steps=100, language='spa', n_iterations=n_iterations)
+#print(dt.datetime.now())

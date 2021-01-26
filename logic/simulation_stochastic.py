@@ -3,8 +3,7 @@ import random
 import pandas as pd
 import numpy as np
 from root import DIR_INPUT, DIR_OUTPUT
-import multiprocessing
-
+import datetime as dt
 
 def recurrent_assignation(info_df: pd.DataFrame):
     columns = list(info_df.columns)
@@ -345,8 +344,7 @@ class Model(object):
         result_state['cost'] = qaly_cost['cost']/(inflation_rate**state['treatment'])
         return result_state
 
-    def simulate_medication(self, result_list: list, iteration: int, inflation_rate: float,
-                            project_switch: bool = False):
+    def simulate_medication(self, iteration: int, inflation_rate: float, project_switch: bool = False):
         states = list()
         state = self.initial_state()
         age_group = math.floor(state['age'] / 60)
@@ -368,8 +366,9 @@ class Model(object):
             while states[len(states) - 1]['tests'] != 'dead':
                 states.append(self.simulate_change(state=states[len(states) - 1], i=iteration))
         states = pd.DataFrame.from_dict(data=states, orient='columns')
-        states['exit_reason'] = change_reason
-        result_list.append(states)
+        return {'qaly': states.qaly.sum(), 'treatment': states.treatment.max(), 'costs': states.cost.sum(),
+                 'acute_events': len(states[states.acute]), 'chronic_event': states.chronic.max(),
+                 'exit_reason': change_reason}
 
     def parallel_simulation(self, medication_name: str, group: str = 'Unique', n_simulations: int = 1000,
                             inflation_rate: float = 1.0, project_switch: bool = False):
@@ -378,28 +377,18 @@ class Model(object):
         if 'switch_phase' not in self.medications.keys():
             self.load_medication('switch_phase')
         self.generate_random(n_iterations=n_simulations, medication_name=medication_name)
-        cores = multiprocessing.cpu_count()*3
-        manager = multiprocessing.Manager()
-        return_list = manager.list()
-        args = list()
+        return_list = list()
         for i in range(n_simulations):
-            args.append((return_list, i, inflation_rate, project_switch))
-        with multiprocessing.Pool(processes=cores) as pool:
-            pool.starmap(self.simulate_medication, args)
-        result_list = list()
-        for i in range(n_simulations):
-            df = return_list[i]
-            result_list.append({'medication_name': medication_name, 'qaly': df.qaly.sum(),
-                                'treatment': df.treatment.max(), 'costs': df.cost.sum(),
-                                'acute_events': len(df[df.acute]), 'chronic_event': df.chronic.max(),
-                                'exit_reason': df.exit_reason.unique()[0]})
-        return_list = pd.DataFrame(result_list)
+            return_list.append(self.simulate_medication(i, inflation_rate, project_switch))
+        return_list = pd.DataFrame(return_list)
         return_list.reset_index(drop=False, inplace=True)
+        return_list['medication_name'] = medication_name
         return_list.rename(columns={'index': 'iteration'}, inplace=True)
         return_list.iteration = return_list.iteration + 1
         return_list['group'] = group
         return_list['discount_rate'] = '5'
         return_list.to_csv(DIR_OUTPUT + 'results_s_' + medication_name + '.csv', index=False)
+        print(medication_name, dt.datetime.now())
 
     def generate_random(self, n_iterations: int, medication_name: str):
         # Month_death_rate
