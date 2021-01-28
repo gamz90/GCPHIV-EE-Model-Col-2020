@@ -1,11 +1,11 @@
 TYPE,NAME,PROBABILITY,BASE_VALUE,INF_VALUE,SUP_VALUE
 C,insomnio,Immediate_Death,0,0,0
 C,insomnio,Immediate_Change,0,0,0
-C,insomnio,Immediate_QALY,0.08,0.07,0.09
+C,insomnio,Immediate_QALY,0.08,0.09,0.07
 C,insomnio,Immediate_Cost,0,0,0
 C,insomnio,Chronic_Death,0,0,0
 C,insomnio,Chronic_Change,0.25,0.25,0.25
-C,insomnio,Chronic_QALY,0.08,0.07,0.09
+C,insomnio,Chronic_QALY,0.08,0.09,0.07
 C,insomnio,Chronic_Cost,22821.97136,20169.17908,33847.03326
 A,iam,Immediate_Death,0.11,0.11,0.11
 A,iam,Immediate_Change,0.8,0.8,0.8
@@ -13,15 +13,15 @@ A,iam,Immediate_QALY,0.3,0.3,0.3
 A,iam,Immediate_Cost,12207540.88,8756035.75,22568389.41
 A,intento_suicidio,Immediate_Death,0,0,0
 A,intento_suicidio,Immediate_Change,1,1,1
-A,intento_suicidio,Immediate_QALY,0.08,0.07,0.09
+A,intento_suicidio,Immediate_QALY,0.08,0.09,0.07
 A,intento_suicidio,Immediate_Cost,4480423.3,4271807.18,5674146.46
 C,depresion,Immediate_Death,0,0,0
 C,depresion,Immediate_Change,0,0,0
-C,depresion,Immediate_QALY,0.08,0.07,0.09
+C,depresion,Immediate_QALY,0.08,0.09,0.07
 C,depresion,Immediate_Cost,0,0,0
 C,depresion,Chronic_Death,0,0,0
 C,depresion,Chronic_Change,0.9,0.9,0.9
-C,depresion,Chronic_QALY,0.08,0.07,0.09
+C,depresion,Chronic_QALY,0.08,0.09,0.07
 C,depresion,Chronic_Cost,84338.1369,44923.50491,158770.472
 C,hiperglicemia ,Immediate_Death,0,0,0
 C,hiperglicemia ,Immediate_Change,0,0,0
@@ -55,3 +55,11 @@ C,toxicidad_hepatica,Chronic_Death,0,0,0
 C,toxicidad_hepatica,Chronic_Change,0.5,0.5,0.5
 C,toxicidad_hepatica,Chronic_QALY,0.043,0.028,0.058
 C,toxicidad_hepatica,Chronic_Cost,0,0,0
+C,toxicidad_osea,Immediate_Death,0,0,0
+C,toxicidad_osea,Immediate_Change,0,0,0
+C,toxicidad_osea,Immediate_QALY,0.043,0.028,0.058
+C,toxicidad_osea,Immediate_Cost,899080.8853,358450.6168,1813363.367
+C,toxicidad_osea,Chronic_Death,0,0,0
+C,toxicidad_osea,Chronic_Change,0.7,0.7,0.7
+C,toxicidad_osea,Chronic_QALY,0.026,0.017,0.027
+C,toxicidad_osea,Chronic_Cost,64701.56557,86949.78538,161864.0941

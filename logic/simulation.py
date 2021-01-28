@@ -362,23 +362,23 @@ class Model(object):
             chronic_months = step_length/2-1 if (step_length in [2, 6]) else 0
             qaly_chronic_immediate = qaly*(1-adverse_information['chronic']['Immediate_QALY'])
             if np.isnan(qaly_chronic_immediate) or qaly_chronic_immediate > 1:
-                print('qaly_chronic_immediate')
+                print(medication_name, 'qaly_chronic_immediate')
             qaly_chronic_long_term = qaly * (1 - adverse_information['chronic']['Chronic_QALY'])
             if np.isnan(qaly_chronic_long_term) or qaly_chronic_long_term > 1:
-                print('qaly_chronic_long_term')
+                print(medication_name, 'qaly_chronic_long_term')
             qaly = (qaly*step_length/2+qaly_chronic_immediate+qaly_chronic_long_term*chronic_months)
             cost += adverse_information['chronic']['Immediate_Cost'] + adverse_information['chronic']['Chronic_Cost'] *\
                     chronic_months
             return {'qaly': qaly, 'cost': cost}
         elif chronic == 2:
             qaly = qaly * (1 - adverse_information['chronic']['Chronic_QALY'])
-            if np.isnan(qaly) or qaly>1 :
-                print('qaly_chronic_long_term')
+            if np.isnan(qaly) or qaly > 1 :
+                print(medication_name, 'qaly_chronic_long_term')
             cost += adverse_information['chronic']['Chronic_Cost'] * step_length
         if acute:
             qaly_acute_immediate = qaly * (1 - adverse_information['acute']['Immediate_QALY'])
             if np.isnan(qaly_acute_immediate) or qaly_acute_immediate>1 :
-                print('qaly_acute_immediate')
+                print(medication_name, 'qaly_acute_immediate')
             qaly = qaly*(step_length-1)+qaly_acute_immediate
 
             cost += adverse_information['acute']['Immediate_Cost']
@@ -397,7 +397,7 @@ class Model(object):
             df = self.simulate_medication(medication_name=medication_name, scenario=scenario,
                                           adverse_information=adverse_information, inflation_rate=inflation_rate[1],
                                           project_switch=project_switch)
-            sim_r = {'medication_name': medication_name, 'qaly': df.qaly.sum(), 'treatment': df.treatment.max(), 'costs': df.cost.sum(), 'acute_events': len(df[df.acute]), 'chronic_event': df.chronic.max(), 'exit_reason': df.exit_reason.unique()[0]}
+            sim_r = {'starting_age': df.age.min(), 'qaly': df.qaly.sum(), 'treatment': df.treatment.max(), 'costs': df.cost.sum(), 'acute_events': len(df[df.acute]), 'chronic_event': df.chronic.max(), 'exit_reason': df.exit_reason.unique()[0]}
             if sim_r['qaly'] > 100:
                 print(df)
                 print('medication_name', medication_name, 'qaly', df.qaly.sum(), 'treatment', df.treatment.max(), 'costs', df.cost.sum(), 'acute_events', len(df[df.acute]), 'chronic_event', df.chronic.max(), 'exit_reason', df.exit_reason.unique()[0])
@@ -409,6 +409,8 @@ class Model(object):
         return_list['group'] = group
         return_list['discount_rate'] = inflation_rate[0]
         return_list['switch_cost'] = scenario['switch_cost']
+        return_list['medication_name'] = medication_name
+        return_list.sort_values(by='starting_age', ascending=True, inplace=True)
         return_list.to_csv(DIR_OUTPUT + 'results_' + medication_name + '_'+inflation_rate[0] + '_' +
                            scenario['switch_cost'] + '.csv', index=False)
         print(medication_name, dt.datetime.now())
