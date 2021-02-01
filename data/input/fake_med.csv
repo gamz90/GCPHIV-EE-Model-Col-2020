@@ -1,8 +1,0 @@
-EVENT,SUP_TREATMENT,BASE_VALUE,INF_VALUE,SUP_VALUE
-adherent_month_cost,ALL,250000,225000,275000
-test_cost,ALL,21735,23374,8163
-test_cost_high_charge,ALL,11026,29358,44690
-efficiency,2,0.8,0.54,0.66
-efficiency,6,0.8,0.54,0.66
-efficiency,12,0.8,0.54,0.66
-efficiency,1000000,0.8,0.54,0.66
