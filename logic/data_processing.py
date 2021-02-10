@@ -132,7 +132,8 @@ class DataProcessing(object):
                             xlabels.append('Sin evento')
                         else:
                             xlabels.append('No reaction')
-                    elif x+0.0 == 1.0:
+                    elif round(x, 2) == 1.0:
+                        print('entró')
                         if language == 'spa':
                             xlabels.append('Con evento')
                         else:
@@ -233,6 +234,24 @@ class DataProcessing(object):
             ylabels = ['$' + '{:,.2f}'.format(x) + 'M' for x in ax.get_yticks() / 1000000]
             ax.set_yticklabels(ylabels)  # set new labels
         graph_name = DIR_OUTPUT + 'dispersion_'+self.group_name
+        if self.distribution:
+            graph_name += '_d'
+        if self.switch_cost is not None:
+            graph_name += '_' + self.switch_cost
+        if self.pregnancy_model:
+            graph_name += '_p'
+        if self.insert_switch:
+            graph_name += '_future_lines'
+        graph_name += '.png'
+        plt.savefig(graph_name, bbox_inches="tight")
+        print('Exported:', graph_name, dt.datetime.now())
+        plt.clf()
+        g = sns.relplot(x=qaly, y=costs, hue=medication_name, data=results[results[discount_rate==3.5]], row=group,
+                        style=medication_name, markers=mark, kind='scatter')
+        for ax in g.axes.flat:
+            ylabels = ['$' + '{:,.2f}'.format(x) + 'M' for x in ax.get_yticks() / 1000000]
+            ax.set_yticklabels(ylabels)  # set new labels
+        graph_name = DIR_OUTPUT + 'dispersion_3.5_' + self.group_name
         if self.distribution:
             graph_name += '_d'
         if self.switch_cost is not None:
@@ -383,7 +402,7 @@ class DataProcessing(object):
         fmt = '$' + '{x:,.2f}' + 'M'
         tick = mtick.StrMethodFormatter(fmt)
         ax.xaxis.set_major_formatter(tick)
-        ax.xaxis.set_label('(' + self.currency + ')')
+        ax.xaxis.set_label_text('(' + self.currency + ')')
         graph_name = DIR_OUTPUT + 'costs_total' + '_' + self.group_name
         if self.distribution:
             graph_name += '_d'
@@ -408,9 +427,9 @@ class DataProcessing(object):
         tick = mtick.StrMethodFormatter(fmt)
         ax.xaxis.set_major_formatter(tick)
         if language == 'spa':
-            ax.yaxis.set_label('Proporcion')
+            ax.yaxis.set_label_text('Proporcion')
         else:
-            ax.yaxis.set_label('Proportion')
+            ax.yaxis.set_label_text('Proportion')
         graph_name = DIR_OUTPUT + 'costs_percent' + '_' + self.group_name
         if self.distribution:
             graph_name += '_d'
@@ -434,9 +453,9 @@ class DataProcessing(object):
         tick = mtick.StrMethodFormatter(fmt)
         ax.xaxis.set_major_formatter(tick)
         if language == 'spa':
-            ax.yaxis.set_label('Proporcion')
+            ax.yaxis.set_label_text('Proporcion')
         else:
-            ax.yaxis.set_label('Proportion')
+            ax.yaxis.set_label_text('Proportion')
         graph_name = DIR_OUTPUT + exit_reason + '_' + self.group_name
         if self.distribution:
             graph_name += '_d'
@@ -612,12 +631,12 @@ class DataProcessing(object):
                     df3.plot(x=medication_name, y=subplot_title, kind='barh', ax=ax[i],
                                                        subplots=True, sharex=False, legend=False)
                     ax[i].xaxis.set_major_formatter(tick)
-                    ax[i].xaxis.set_label(costs + ' (' + self.currency + ')')
+                    ax[i].xaxis.set_label_text(costs + ' (' + self.currency + ')')
                 else:
                     df3.plot(x=medication_name, y=subplot_title, kind='barh', ax=ax[j][i],
                                                    subplots=True, sharex=False, legend=False)
                     ax[j][i].xaxis.set_major_formatter(tick)
-                    ax[j][i].xaxis.set_label(costs + ' (' + self.currency + ')')
+                    ax[j][i].xaxis.set_label_text(costs + ' (' + self.currency + ')')
                 values = [df2[df2[discount_rate] == dr].columns] + list(df2[df2[discount_rate] == dr].values)
                 wb.new_sheet('DR'+str(dr)+pib_name+key, data=values)
                 j += 1
@@ -662,7 +681,7 @@ class DataProcessing(object):
                 df2.plot(x=medication_name, y=subplot_title, kind='barh', ax=ax[i],
                                                        subplots=True, sharex=False, legend=False)
                 ax[i].xaxis.set_major_formatter(tick)
-                ax[i].xaxis.set_label(costs + ' (' + self.currency + ')')
+                ax[i].xaxis.set_label_text(costs + ' (' + self.currency + ')')
                 i += 1
             f.suptitle(graph_title)
             graph_name = graph_name[:-4] + '_3.5.png'
