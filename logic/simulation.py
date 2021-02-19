@@ -1,4 +1,5 @@
 import math
+import os
 import random
 import pandas as pd
 from root import DIR_INPUT, DIR_OUTPUT
@@ -155,7 +156,7 @@ class Model(object):
         return {'chronic': chronic, 'acute': acute}
 
     def simulate_medication(self, medication_name: str, scenario: dict, adverse_information: dict,
-                            inflation_rate: float = 1.0, insert_switch: bool = False, max_high_tests: int = 2):
+                            inflation_rate: float = 1.0, max_high_tests: int = 2):
         """
         Model iteration, starting from the moment a patient has his or her first ART control, up to the moment of
         discontinuing the medication.
@@ -164,7 +165,6 @@ class Model(object):
         :param scenario: Scenario for the variables.
         :param adverse_information: Relevant adverse reaction relevant information.
         :param inflation_rate: Discount rate considered.
-        :param insert_switch: Boolean indicating if the model inserts future switch monthly costs
         :return: Summary of the simulation of the patient with the synthesized relevant information.
         """
         states = list()
@@ -188,61 +188,24 @@ class Model(object):
         change_reason = states[len(states)-1]['tests']
         if change_reason == 'failure':
             high_tests += 1
-        month = 0
         if change_reason != 'dead' and change_reason != 'dead_ar':
-            chronic = states[len(states)-1]['chronic']
-            if insert_switch:
-                dead = False
-                cost = self.general_info['values']['switch_cost']['ALL']['ALL'][
-                            scenario.get('switch_cost', 'BASE_VALUE')]/(inflation_rate **
-                                                                        states[len(states) - 1]['treatment'])
-                qaly = 0
-                while not dead:
-                    age_group = math.floor((states[len(states) - 1]['age']+month) / 60)
-                    age_group = 'e' + str(min(age_group, 16)) if age_group >= 10 else 'e0' + str(age_group)
-                    death_prob = 1 - (1 - self.general_info['values']['month_d_r'][age_group][state['sex']][
-                        scenario.get('month_d_r', 'BASE_VALUE')])
-                    # GENERAL DEATH
-                    if random.random() < death_prob:
-                        dead = True
-                    else:
-                        cost += self.general_info['values']['switch_month_cost']['ALL']['ALL'][
-                            scenario.get('switch_cost', 'BASE_VALUE')]/(inflation_rate **
-                                                                              (states[len(states) - 1]['treatment'] +
-                                                                               month))
-                        if chronic == 1:
-                            cost += adverse_information['chronic']['Chronic_Cost'] / (inflation_rate **
-                                                                              (states[len(states) - 1]['treatment'] +
-                                                                               month))
-                        qaly += self.general_info['values']['base_qaly'][age_group]['ALL'][
-                                    scenario.get('base_qaly', 'BASE_VALUE')] * self.general_info['values'][
-                            'switch_qaly']['ALL']['ALL'][
-                            scenario.get('switch_qaly', 'BASE_VALUE')] / (12 * (inflation_rate ** (
-                                states[len(states) - 1]['treatment']+month)))
-                    if chronic == 1:
-                        qaly = qaly * (1 - adverse_information['chronic']['Chronic_QALY'])
-                    month += 1
-                states[len(states)-1]['total_cost'] += cost
-                states[len(states) - 1]['qaly'] += qaly
-            else:
-                if change_reason == 'failure':
-                    states[len(states) - 1]['test_cost'] += self.general_info['values']['switch_cost']['ALL']['ALL'][
-                        scenario.get('switch_cost', 'BASE_VALUE')] / inflation_rate ** states[len(states) - 1][
-                        'treatment']
-                    states[len(states) - 1]['total_cost'] += self.general_info['values']['switch_cost']['ALL']['ALL'][
-                                                                scenario.get('switch_cost',
-                                                                             'BASE_VALUE')] / inflation_rate ** \
-                                                            states[len(states) - 1][
-                                                                'treatment']
-                states[len(states) - 1]['qaly'] *= self.general_info['values']['switch_qaly']['ALL']['ALL'][
-                            scenario.get('switch_qaly', 'BASE_VALUE')]
+            if change_reason == 'failure':
+                states[len(states) - 1]['test_cost'] += self.general_info['values']['switch_cost']['ALL']['ALL'][
+                    scenario.get('switch_cost', 'BASE_VALUE')] / inflation_rate ** states[len(states) - 1][
+                    'treatment']
+                states[len(states) - 1]['total_cost'] += self.general_info['values']['switch_cost']['ALL']['ALL'][
+                                                            scenario.get('switch_cost',
+                                                                         'BASE_VALUE')] / inflation_rate ** \
+                                                        states[len(states) - 1][
+                                                            'treatment']
+            states[len(states) - 1]['qaly'] *= self.general_info['values']['switch_qaly']['ALL']['ALL'][
+                        scenario.get('switch_qaly', 'BASE_VALUE')]
         states = pd.DataFrame.from_dict(data=states, orient='columns')
         return {'qaly': states.qaly.sum(), 'treatment': states.treatment.max(), 'costs': states.total_cost.sum(),
                 'test_cost': states.test_cost.sum(), 'adverse_cost': states.adverse_cost.sum(),
                 'medication_cost': states.medication_cost.sum(), 'acute_events': len(states[states.acute]),
                 'chronic_event': states.chronic.max(), 'exit_reason': change_reason, 'n_high_tests': high_tests,
-                'percentage_high_tests': high_tests/len(states), 'starting_age': states.age.min(),
-                'time_to_death': states.treatment.max() + month}
+                'percentage_high_tests': high_tests/len(states), 'starting_age': states.age.min()}
 
     def simulate_step(self, state: dict, medication_name: str, adverse_information: dict, scenario: dict,
                       inflation_rate: float = 1.0, max_high_tests: int = 2):
@@ -476,7 +439,7 @@ class Model(object):
 
     def parallel_simulation(self, medication_name: str, scenario: dict, group: str = 'Unique',
                             n_simulations: int = 1000, inflation_rate: tuple = ('None', 1.0),
-                            insert_switch: bool = False, max_high_tests: int = 2):
+                            max_high_tests: int = 2):
         """
         Process that accumulates the results of the considered simulations from the given scenario.
         :param max_high_tests: maximum amount of tests with a high viral load before declaring virological failure
@@ -486,29 +449,30 @@ class Model(object):
         :param group: group to which the medication scheme belongs.
         :param n_simulations: number of simulations for the model.
         :param inflation_rate: discount rate considered.
-        :param insert_switch: Boolean indicating if the model inserts future switch monthly costs
         """
-        if medication_name not in self.medications.keys():
-            self.load_medication(medication_name)
-        adverse_information = self.calculate_probabilities(medication_name=medication_name, scenario=scenario)
-        result_list = list()
-        for i in range(n_simulations):
-            result_list.append(self.simulate_medication(medication_name=medication_name, scenario=scenario,
-                                          adverse_information=adverse_information, inflation_rate=inflation_rate[1],
-                                          insert_switch=insert_switch, max_high_tests=max_high_tests))
-        return_list = pd.DataFrame(result_list)
-        return_list.reset_index(drop=False, inplace=True)
-        return_list.rename(columns={'index': 'iteration'}, inplace=True)
-        return_list.iteration = return_list.iteration+1
-        return_list['group'] = group
-        return_list['discount_rate'] = inflation_rate[0]
-        return_list['switch_cost'] = scenario['switch_cost']
-        return_list['medication_name'] = medication_name
-        return_list['treatment'] = return_list['treatment']/12
-        return_list['time_to_death'] = return_list['time_to_death']/12
-        return_list.sort_values(by='starting_age', ascending=True, inplace=True)
-        file_name = DIR_OUTPUT + 'results_' + medication_name + '_'+inflation_rate[0] + '_' + scenario['switch_cost']
-        if insert_switch:
-            file_name += '_future_lines'
-        return_list.to_csv(file_name + '.csv', index=False)
-        print(medication_name, scenario, inflation_rate, insert_switch, dt.datetime.now())
+        file_name = DIR_OUTPUT + 'results_' + medication_name + '_' + inflation_rate[0] + '_' + scenario['switch_cost']
+        if os.path.exists(file_name + '.csv'):
+            print(medication_name, scenario, inflation_rate, dt.datetime.now())
+        else:
+            if medication_name not in self.medications.keys():
+                self.load_medication(medication_name)
+            adverse_information = self.calculate_probabilities(medication_name=medication_name, scenario=scenario)
+            result_list = list()
+            for i in range(n_simulations):
+                result_list.append(self.simulate_medication(medication_name=medication_name, scenario=scenario,
+                                              adverse_information=adverse_information, inflation_rate=inflation_rate[1],
+                                              max_high_tests=max_high_tests))
+            return_list = pd.DataFrame(result_list)
+            return_list.reset_index(drop=False, inplace=True)
+            return_list.rename(columns={'index': 'iteration'}, inplace=True)
+            return_list.iteration = return_list.iteration+1
+            return_list['group'] = group
+            return_list['discount_rate'] = inflation_rate[0]
+            return_list['switch_cost'] = scenario['switch_cost']
+            return_list['medication_name'] = medication_name
+            return_list['treatment'] = return_list['treatment']/12
+            return_list.sort_values(by='starting_age', ascending=True, inplace=True)
+            file_name = DIR_OUTPUT + 'results_' + medication_name + '_'+inflation_rate[0] + '_' + scenario[
+                'switch_cost']
+            return_list.to_csv(file_name + '.csv', index=False)
+            print(medication_name, scenario, inflation_rate, dt.datetime.now())

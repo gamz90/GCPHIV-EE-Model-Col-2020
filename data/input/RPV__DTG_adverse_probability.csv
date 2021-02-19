@@ -1,9 +1,0 @@
-TYPE,NAME,PROBABILITY
-C,colesterol_elevado,0.00516245
-C,depresion,0.001133302
-A,iam,0.000561029
-C,insomnio,0.002013822
-A,intento_suicidio,0
-C,toxicidad_hepatica,0.000703025
-C,toxicidad_osea,0
-C,toxicidad_renal,0

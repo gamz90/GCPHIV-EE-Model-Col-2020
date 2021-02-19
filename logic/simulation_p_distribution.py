@@ -1,4 +1,5 @@
 import math
+import os
 import random
 import pandas as pd
 import numpy as np
@@ -97,8 +98,9 @@ class PregnancyDistributionModel(object):
             self.medications[medication_name]['adverse_probability'] = None
 
     def calculate_qaly_cost(self, viral_charge: bool, medication_name: str, age: str, chronic: int, acute: bool,
-                            step_length: int, i: int, integrate_pregnancy_risk: bool = False):
+                            dead: bool, step_length: int, i: int, integrate_pregnancy_risk: bool = False):
         """
+        :param dead: boolean that indicates if the patient died during the period
         :param medication_name: Name of the considered medication.
         :param viral_charge: boolean value indicating if patient has a high viral charge
         :param age: quinquennial age group of the patient
@@ -109,46 +111,63 @@ class PregnancyDistributionModel(object):
         :param integrate_pregnancy_risk: boolean variable that indicates if the simulation
         :return: dictionary with associated qaly value and cost
         """
-        qaly = self.random_values[medication_name]['base_qaly'][age][i]/12
-        if np.isnan(qaly):
-            print('base_qaly')
-        cost = self.random_values[medication_name]['test_cost'][i]
         adverse = self.random_values[medication_name]['adverse']
+        result_vector = {'qaly': self.random_values[medication_name]['base_qaly'][age][i] / 12,
+                         'test_cost': self.random_values[medication_name]['test_cost'][i], 'adverse_cost': 0,
+                         'medication_cost': 0, 'total_cost': 0,
+                         'pregnancy_risk_cost': 0}
+        if np.isnan(result_vector['qaly']):
+            print('base_qaly')
         if viral_charge:
-            qaly *= self.random_values[medication_name]['high_test_qaly'][i]
-            if np.isnan(qaly):
+            result_vector['qaly'] = result_vector['qaly'] * self.random_values[medication_name]['high_test_qaly'][i]
+            if np.isnan(result_vector['qaly']) or result_vector['qaly'] > 1:
                 print('high_test_qaly')
-            cost += self.random_values[medication_name]['test_cost_high_charge'][i]
-        cost += self.random_values[medication_name]['adherent_month_cost'][i] * step_length
+            result_vector['test_cost'] = result_vector['test_cost'] + self.random_values[medication_name][
+                'test_cost_high_charge'][i]
+        result_vector['medication_cost'] = self.random_values[medication_name]['adherent_month_cost'][i] * (
+            step_length / 2 if dead else step_length)
         if integrate_pregnancy_risk:
-            qaly *= 1-adverse['pregnancy']['Immediate_QALY'][i]
-            cost += adverse['pregnancy']['Immediate_Cost'][i]
+            result_vector['qaly'] *= 1-adverse['pregnancy']['Immediate_QALY'][i]
+            if np.isnan(result_vector['qaly']) or result_vector['qaly'] > 1:
+                print('integrate pregnancy risk')
+            result_vector['pregnancy_risk_cost'] = adverse['pregnancy']['Immediate_Cost'][i]
         if chronic == 1:
-            chronic_months = step_length / 2 - 1 if (step_length in [2, 6]) else 0
-            qaly_chronic_immediate = qaly * (1 - adverse['chronic']['Immediate_QALY'][i])
-            if np.isnan(qaly_chronic_immediate):
-                print('Chronic,Immediate_QALY')
-            qaly_chronic_long_term = qaly * (1 - adverse['chronic']['Chronic_QALY'][i])
-            if np.isnan(qaly_chronic_long_term):
-                print('Chronic,Chronic_QALY')
-            qaly = (qaly * step_length / 2 + qaly_chronic_immediate + qaly_chronic_long_term * chronic_months)
-            cost += adverse['chronic']['Immediate_Cost'][i] + adverse['chronic']['Chronic_Cost'][i] * \
-                    chronic_months
-            return {'qaly': qaly, 'cost': cost}
+            result_vector['adverse_cost'] = adverse['chronic']['Immediate_Cost'][i]
+            if dead:
+                pass
+            else:
+                chronic_months = step_length / 2 - 1
+                qaly_chronic_immediate = result_vector['qaly'] * (1 - adverse['chronic']['Immediate_QALY'][i])
+                if np.isnan(qaly_chronic_immediate) or qaly_chronic_immediate > 1:
+                    print(medication_name, 'qaly_chronic_immediate')
+                qaly_chronic_long_term = result_vector['qaly'] * (1 - adverse['chronic']['Chronic_QALY'][i])
+                if np.isnan(qaly_chronic_long_term) or qaly_chronic_long_term > 1:
+                    print(medication_name, 'qaly_chronic_long_term')
+                result_vector['qaly'] = (result_vector['qaly'] * step_length / 2 + qaly_chronic_immediate +
+                                         qaly_chronic_long_term * chronic_months)
+                result_vector['adverse_cost'] = result_vector['adverse_cost'] + adverse['chronic']['Chronic_Cost'][i] \
+                                                * chronic_months
+            result_vector['total_cost'] = result_vector['test_cost'] + result_vector['adverse_cost'] + result_vector[
+                'medication_cost'] + result_vector['pregnancy_risk_cost']
+            return result_vector
         elif chronic == 2:
-            qaly = qaly * (1 - adverse['chronic']['Chronic_QALY'][i])
-            if np.isnan(qaly):
-                print('Chronic,Chronic_QALY')
-            cost += adverse['chronic']['Chronic_Cost'][i] * step_length
+            result_vector['qaly'] = result_vector['qaly'] * (1 - adverse['chronic']['Chronic_QALY'][i])
+            if np.isnan(result_vector['qaly']) or result_vector['qaly'] > 1:
+                print(medication_name, 'qaly_chronic_long_term')
+            result_vector['adverse_cost'] = adverse['chronic']['Chronic_Cost'][i] * (step_length / 2 if dead
+                                                                                     else step_length)
         if acute:
-            qaly_acute_immediate = qaly * (1 - adverse['acute']['Immediate_QALY'][i])
-            if np.isnan(qaly_acute_immediate):
-                print('acute,Immediate_QALY', adverse['acute']['Immediate_QALY'][i])
-            qaly = qaly * (step_length - 1) + qaly_acute_immediate
-            cost += adverse['acute']['Immediate_Cost'][i]
+            qaly_acute_immediate = 0 if dead else result_vector['qaly'] * (1 - adverse['acute']['Immediate_QALY'][i])
+            if np.isnan(qaly_acute_immediate) or qaly_acute_immediate > 1:
+                print(medication_name, 'qaly_acute_immediate')
+            result_vector['qaly'] = result_vector['qaly'] * (step_length / 2 if dead else step_length - 1) + \
+                                    qaly_acute_immediate
+            result_vector['adverse_cost'] = result_vector['adverse_cost'] + adverse['acute']['Immediate_Cost'][i]
         else:
-            qaly = qaly*step_length
-        return {'qaly': qaly, 'cost': cost}
+            result_vector['qaly'] = result_vector['qaly'] * (step_length / 2 if dead else step_length)
+        result_vector['total_cost'] = result_vector['test_cost'] + result_vector['adverse_cost'] + result_vector[
+            'medication_cost']+result_vector['pregnancy_risk_cost']
+        return result_vector
 
     def initial_state(self, efficiency: float):
         """
@@ -194,9 +213,9 @@ class PregnancyDistributionModel(object):
             qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                  chronic=(state['chronic'] + result_state['chronic']),
                                                  acute=result_state['acute'], i=i, step_length=time_for_step,
-                                                 medication_name=medication_name)
-            result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
-            result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
+                                                 medication_name=medication_name, dead=True)
+            for gc in qaly_cost:
+                result_state[gc] = qaly_cost[gc] / (inflation_rate ** state['treatment'])
             return result_state
         #  Chronic event can occur
         if state['chronic'] == 0:
@@ -210,12 +229,12 @@ class PregnancyDistributionModel(object):
                     result_state['age'] += time_for_step / 2
                     result_state['treatment'] += time_for_step / 2
                     qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0),
-                                                         age=age_group,
+                                                         age=age_group, dead=True,
                                                          chronic=(state['chronic'] + result_state['chronic']),
                                                          acute=result_state['acute'], i=i, step_length=time_for_step,
                                                          medication_name=medication_name)
-                    result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
-                    result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
+                    for gc in qaly_cost:
+                        result_state[gc] = qaly_cost[gc] / (inflation_rate ** state['treatment'])
                     return result_state
                 else:
                     # Immediate change due to chronic reaction
@@ -226,10 +245,10 @@ class PregnancyDistributionModel(object):
                         result_state['treatment'] += time_for_step / 2
                         qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                              chronic=(state['chronic'] + result_state['chronic']),
-                                                             acute=result_state['acute'], i=i,
+                                                             acute=result_state['acute'], i=i, dead=False,
                                                              step_length=time_for_step, medication_name=medication_name)
-                        result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
-                        result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
+                        for gc in qaly_cost:
+                            result_state[gc] = qaly_cost[gc] / (inflation_rate ** state['treatment'])
                         return result_state
         else:
             death = 1 - (1 - self.random_values[medication_name]['adverse']['chronic']['Chronic_Death'][i]) ** \
@@ -241,23 +260,23 @@ class PregnancyDistributionModel(object):
                 qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                      chronic=(state['chronic'] + result_state['chronic']),
                                                      acute=result_state['acute'], i=i, step_length=time_for_step,
-                                                     medication_name=medication_name)
-                result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
-                result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
+                                                     medication_name=medication_name, dead=True)
+                for gc in qaly_cost:
+                    result_state[gc] = qaly_cost[gc] / (inflation_rate ** state['treatment'])
                 return result_state
             else:
                 change = 1 - (1 - self.random_values[medication_name]['adverse']['chronic']['Chronic_Change'][i]) ** \
                          time_for_step
-                if random.random() < change:  # Death due to chronic reaction aftermath
+                if random.random() < change:  # Change due to chronic reaction aftermath
                     result_state['tests'] = 'adverse_reaction'
                     result_state['age'] += time_for_step / 2
                     result_state['treatment'] += time_for_step / 2
                     qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                          chronic=(state['chronic'] + result_state['chronic']),
                                                          acute=result_state['acute'], i=i, step_length=time_for_step,
-                                                         medication_name=medication_name)
-                    result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
-                    result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
+                                                         medication_name=medication_name, dead=False)
+                    for gc in qaly_cost:
+                        result_state[gc] = qaly_cost[gc] / (inflation_rate ** state['treatment'])
                     return result_state
         if (not state['acute']) and result_state['chronic'] == state['chronic']:  # Acute event can occur
             occurrence = 1 - (1 - self.random_values[medication_name]['adverse']['acute']['probability'][i]) ** \
@@ -272,9 +291,9 @@ class PregnancyDistributionModel(object):
                     qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                          chronic=(state['chronic'] + result_state['chronic']),
                                                          acute=result_state['acute'], i=i, step_length=time_for_step,
-                                                         medication_name=medication_name)
-                    result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
-                    result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
+                                                         medication_name=medication_name, dead=True)
+                    for gc in qaly_cost:
+                        result_state[gc] = qaly_cost[gc] / (inflation_rate ** state['treatment'])
                     return result_state
                 else:
                     # Change due to acute reaction
@@ -284,10 +303,10 @@ class PregnancyDistributionModel(object):
                         result_state['treatment'] += time_for_step / 2
                         qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                              chronic=(state['chronic'] + result_state['chronic']),
-                                                             acute=result_state['acute'], i=i,
+                                                             acute=result_state['acute'], i=i, dead=False,
                                                              step_length=time_for_step, medication_name=medication_name)
-                        result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
-                        result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
+                        for gc in qaly_cost:
+                            result_state[gc] = qaly_cost[gc] / (inflation_rate ** state['treatment'])
                         return result_state
         result_state['age'] += time_for_step
         result_state['treatment'] += time_for_step
@@ -310,27 +329,25 @@ class PregnancyDistributionModel(object):
             qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group,
                                                  chronic=(state['chronic'] + result_state['chronic']),
                                                  acute=result_state['acute'], i=i, step_length=time_for_step,
-                                                 medication_name=medication_name)
+                                                 medication_name=medication_name, dead=False)
         else:
             qaly_cost = self.calculate_qaly_cost(viral_charge=bool(result_state['tests'] > 0), age=age_group,
                                                  chronic=(state['chronic'] + result_state['chronic']),
                                                  acute=result_state['acute'], i=i, step_length=time_for_step,
-                                                 medication_name=medication_name)
+                                                 medication_name=medication_name, dead=False)
         if np.isnan(qaly_cost['qaly']):
             print(state, i, qaly_cost['qaly'], qaly_cost)
-        result_state['qaly'] = float(qaly_cost['qaly'])/(inflation_rate**state['treatment'])
-        result_state['cost'] = float(qaly_cost['cost'])/(inflation_rate**state['treatment'])
+        for gc in qaly_cost:
+            result_state[gc] = qaly_cost[gc] / (inflation_rate ** state['treatment'])
         return result_state
 
-    def simulate_medication(self, iteration: int, medication_name: str, inflation_rate: float,
-                            insert_switch: bool = False):
+    def simulate_medication(self, iteration: int, medication_name: str, inflation_rate: float):
         """
         Model iteration, starting from the moment a patient has his or her first ART control, up to the moment of
         discontinuing the medication.
         :param iteration: Iteration value to consider.
         :param inflation_rate: Discount rate considered.
         :param medication_name: Name of the considered medication.
-        :param insert_switch: Boolean indicating if the model inserts future switch monthly costs
         :return: Summary of the simulation of the patient with the synthesized relevant information.
         """
         states = list()
@@ -342,16 +359,16 @@ class PregnancyDistributionModel(object):
         age_group = 'e' + str(min(age_group, 16)) if age_group >= 10 else 'e0' + str(age_group)
         had_pregnancy_complications = 0
         adverse = self.random_values[medication_name]['adverse']
-        if random.random() < adverse['pregnant']['probability'][iteration]:
+        if random.random() < adverse['pregnancy']['probability'][iteration]:
             state['pregnancy_risks'] = True
             had_pregnancy_complications = 1
         else:
             state['pregnancy_risks'] = False
         qaly_cost = self.calculate_qaly_cost(viral_charge=bool(state['tests'] > 0), age=age_group, chronic=0,
                                              acute=False, step_length=2, i=iteration, medication_name=medication_name,
-                                             integrate_pregnancy_risk=state['pregnancy_risks'])
-        state['qaly'] = float(qaly_cost['qaly'])
-        state['cost'] = float(qaly_cost['cost'])
+                                             integrate_pregnancy_risk=state['pregnancy_risks'], dead=False)
+        for gc in qaly_cost:
+            state[gc] = qaly_cost[gc]
         states.append(state)
         while states[len(states) - 1]['tests'] not in self.leaving_states:
             high_tests += 1 if states[len(states) - 1]['tests'] > 0 else 0
@@ -360,93 +377,67 @@ class PregnancyDistributionModel(object):
         change_reason = states[len(states) - 1]['tests']
         if change_reason == 'failure':
             high_tests += 1
-        month = 0
         if change_reason != 'dead' or change_reason != 'dead_ar':
-            states[len(states) - 1]['cost'] += self.random_values[medication_name]['switch_cost'][iteration]
-            states[len(states) - 1]['cost'] /= inflation_rate ** states[len(states) - 1]['treatment']
-            states[len(states) - 1]['qaly'] *= self.random_values[medication_name]['switch_qaly'][iteration] /\
-                                               (inflation_rate**states[len(states) - 1]['treatment'])
-            if insert_switch:
-                chronic = states[len(states) - 1]['chronic']
-                dead = False
-                cost = 0
-                qaly = 0
-                adverse = self.random_values[medication_name]['adverse']
-                while not dead:
-                    age_group = math.floor((states[len(states) - 1]['age']+month) / 60)
-                    age_group = 'e' + str(min(age_group, 16)) if age_group >= 10 else 'e0' + str(age_group)
-                    death_prob = 1 - (1 - self.random_values[medication_name]['month_d_r'][age_group][
-                        iteration])
-                    # GENERAL DEATH
-                    if random.random() < death_prob:
-                        dead = True
-                    else:
-                        cost += self.random_values[medication_name]['switch_month_cost'][iteration] / (inflation_rate **
-                                                                              (states[len(states) - 1]['treatment'] +
-                                                                               month))
-                        qaly += self.random_values[medication_name]['base_qaly'][age_group][iteration] * \
-                                self.random_values[medication_name]['switch_qaly'][iteration] / \
-                                (12 * (inflation_rate ** (states[len(states) - 1]['treatment']+month)))
-                        if chronic == 1:
-                            cost += adverse['chronic']['Chronic_Cost'][iteration] / (inflation_rate **
-                                                                              (states[len(states) - 1]['treatment'] +
-                                                                               month))
-                    if chronic == 1:
-                        qaly = qaly * (1 - adverse['chronic']['Chronic_QALY'])
-                    month += 1
-
-                states[len(states)-1]['cost'] += cost
-                states[len(states) - 1]['qaly'] += qaly
+            if change_reason == 'failure':
+                states[len(states) - 1]['test_cost'] += self.random_values[medication_name]['switch_cost'][
+                                                            iteration] / inflation_rate ** states[len(states) - 1][
+                                                            'treatment']
+                states[len(states) - 1]['total_cost'] += self.random_values[medication_name]['switch_cost'][
+                                                             iteration] / inflation_rate ** states[len(states) - 1][
+                                                             'treatment']
+            states[len(states) - 1]['qaly'] *= self.random_values[medication_name]['switch_qaly'][iteration]
         states = pd.DataFrame.from_dict(data=states, orient='columns')
-        return {'qaly': states.qaly.sum(), 'treatment': states.treatment.max(), 'costs': states.cost.sum(),
-                 'acute_events': len(states[states.acute]), 'chronic_event': states.chronic.max(),
-                 'exit_reason': change_reason, 'n_high_tests': high_tests, 'starting_age': states.age.min(),
-                 'time_to_death': states.treatment.max() + month, 'pregnancy_risks': had_pregnancy_complications}
+        return {'qaly': states.qaly.sum(), 'treatment': states.treatment.max(), 'costs': states.total_cost.sum(),
+                'test_cost': states.test_cost.sum(), 'adverse_cost': states.adverse_cost.sum(),
+                'medication_cost': states.medication_cost.sum(),
+                'pregnancy_risk_cost': states.pregnancy_risk_cost.sum(), 'acute_events': len(states[states.acute]),
+                'chronic_event': states.chronic.max(), 'exit_reason': change_reason, 'n_high_tests': high_tests,
+                'percentage_high_tests': high_tests / len(states), 'starting_age': states.age.min(),
+                'pregnancy_risks': had_pregnancy_complications}
 
     def parallel_simulation(self, medication_name: str, group: str = 'Unique', n_simulations: int = 1000,
-                            inflation_rate: float = 1.0, insert_switch: bool = False):
+                            inflation_rate: float = 1.0):
         """
         Process that accumulates the results of the considered simulations from the given scenario.
         :param medication_name: Medication scheme received by the patient. Must be a str
         :param group: group to which the medication scheme belongs.
         :param n_simulations: number of simulations for the model.
         :param inflation_rate: discount rate considered.
-        :param insert_switch: Boolean indicating if the model inserts future switch monthly costs
         """
-        if medication_name in self.medications.keys():
-            pass
+        file_name = DIR_OUTPUT + 'results_d_' + medication_name + '_p.csv'
+        if os.path.exists(file_name):
+            print(medication_name, dt.datetime.now())
         else:
-            self.load_medication(medication_name)
-        if 'switch_phase' in self.medications.keys():
-            pass
-        else:
-            self.load_medication('switch_phase')
-        self.generate_random(n_iterations=n_simulations, medication_name=medication_name, insert_switch=insert_switch)
-        return_list = list()
-        for i in range(n_simulations):
-            return_list.append(self.simulate_medication(i, medication_name, inflation_rate))
-        return_list = pd.DataFrame(return_list)
-        return_list.reset_index(drop=False, inplace=True)
-        return_list.sort_values(by='starting_age', inplace=True)
-        return_list['medication_name'] = medication_name
-        return_list.rename(columns={'index': 'iteration'}, inplace=True)
-        return_list.iteration = return_list.iteration + 1
-        return_list['group'] = group
-        return_list['discount_rate'] = '5'
-        return_list['treatment'] = return_list['treatment'] / 12
-        file_name = DIR_OUTPUT + 'results_d_' + medication_name + '_p'
-        if insert_switch:
-            file_name += '_future_lines'
-        return_list.to_csv(file_name + '.csv', index=False)
-        del self.random_values[medication_name]
-        print(medication_name, insert_switch, dt.datetime.now())
+            if medication_name in self.medications.keys():
+                pass
+            else:
+                self.load_medication(medication_name)
+            if 'switch_phase' in self.medications.keys():
+                pass
+            else:
+                self.load_medication('switch_phase')
+            self.generate_random(n_iterations=n_simulations, medication_name=medication_name)
+            return_list = list()
+            for i in range(n_simulations):
+                return_list.append(self.simulate_medication(i, medication_name, inflation_rate))
+            return_list = pd.DataFrame(return_list)
+            return_list.reset_index(drop=False, inplace=True)
+            return_list.sort_values(by='starting_age', inplace=True)
+            return_list['medication_name'] = medication_name
+            return_list.rename(columns={'index': 'iteration'}, inplace=True)
+            return_list.iteration = return_list.iteration + 1
+            return_list['group'] = group
+            return_list['discount_rate'] = '3.5'
+            return_list['treatment'] = return_list['treatment'] / 12
+            return_list.to_csv(file_name, index=False)
+            del self.random_values[medication_name]
+            print(medication_name, dt.datetime.now())
 
-    def generate_random(self, n_iterations: int, medication_name: str,  insert_switch: bool = False):
+    def generate_random(self, n_iterations: int, medication_name: str):
         """
         Generates the random values for the simulations of the medication scheme.
         :param n_iterations: number of required iterations
         :param medication_name: Medication scheme received by the patient. Must be a str
-        :param insert_switch: Boolean indicating if the model inserts future switch monthly costs
         """
         # Month_death_rate
         random_values = dict()
@@ -537,7 +528,7 @@ class PregnancyDistributionModel(object):
                                 adverse_df[adverse_df['PROBABILITY'] == k].mean()), n_iterations=n_iterations)
                         except Exception as e:
                             print(cond, k, adverse_df[adverse_df['PROBABILITY'] == k].mean(), pregnancy[k], e)
-            acute['probability'] = probability * np.ones(n_iterations)
+            pregnancy['probability'] = probability * np.ones(n_iterations)
         else:
             chronic['probability'] = np.zeros(n_iterations)
             acute['probability'] = np.zeros(n_iterations)
@@ -554,7 +545,4 @@ class PregnancyDistributionModel(object):
         for cat in eff_dict:
             efficiency[cat] = generate_triangular(values=eff_dict[cat], n_iterations=n_iterations)
         random_values['efficiency'] = efficiency
-        if insert_switch:
-            random_values['switch_month_cost'] = generate_triangular(values=self.general_info['values'][
-                'switch_month_cost']['ALL'], n_iterations=n_iterations)
         self.random_values[medication_name] = random_values

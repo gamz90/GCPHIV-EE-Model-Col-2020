@@ -1,9 +1,14 @@
 TYPE,NAME,PROBABILITY
+G,anormalidades_congenitas,0.005464307
 C,colesterol_elevado,0
 C,depresion,0.001423799
 A,iam,0
 C,insomnio,0.001133302
 A,intento_suicidio,0
+G,muerte_neonatal,0.002757707
+G,parto_prematuro,0
 C,toxicidad_hepatica,0.001717285
 C,toxicidad_osea,0.01842347
 C,toxicidad_renal,0
+G,transmision_vih,3.584e-05
+G,tubo_neural,0
