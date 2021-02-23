@@ -23,14 +23,14 @@ C,depresion,Chronic_Death,0,0,0
 C,depresion,Chronic_Change,0.9,0.9,0.9
 C,depresion,Chronic_QALY,0.08,0.07,0.09
 C,depresion,Chronic_Cost,84338.1369,44923.50491,158770.472
-C,hiperglicemia ,Immediate_Death,0,0,0
-C,hiperglicemia ,Immediate_Change,0,0,0
-C,hiperglicemia ,Immediate_QALY,0.043,0.028,0.058
-C,hiperglicemia ,Immediate_Cost,0,0,0
-C,hiperglicemia ,Chronic_Death,0,0,0
-C,hiperglicemia ,Chronic_Change,0.25,0.25,0.25
-C,hiperglicemia ,Chronic_QALY,0.043,0.028,0.058
-C,hiperglicemia ,Chronic_Cost,4173.733413,3299.84129,6389.091918
+C,hiperglicemia,Immediate_Death,0,0,0
+C,hiperglicemia,Immediate_Change,0,0,0
+C,hiperglicemia,Immediate_QALY,0.043,0.028,0.058
+C,hiperglicemia,Immediate_Cost,0,0,0
+C,hiperglicemia,Chronic_Death,0,0,0
+C,hiperglicemia,Chronic_Change,0.25,0.25,0.25
+C,hiperglicemia,Chronic_QALY,0.043,0.028,0.058
+C,hiperglicemia,Chronic_Cost,4173.733413,3299.84129,6389.091918
 C,colesterol_elevado,Immediate_Death,0,0,0
 C,colesterol_elevado,Immediate_Change,0,0,0
 C,colesterol_elevado,Immediate_QALY,0.049,0.046,0.05
@@ -50,15 +50,15 @@ C,toxicidad_renal,Chronic_Cost,0,0,0
 C,toxicidad_hepatica,Immediate_Death,0,0,0
 C,toxicidad_hepatica,Immediate_Change,0,0,0
 C,toxicidad_hepatica,Immediate_QALY,0.043,0.028,0.058
-C,toxicidad_hepatica,Immediate_Cost,899080.8853,358450.6168,1813363.367
+C,toxicidad_hepatica,Immediate_Cost,890794.2925,462221.6103,1681899.228
 C,toxicidad_hepatica,Chronic_Death,0,0,0
 C,toxicidad_hepatica,Chronic_Change,0.5,0.5,0.5
 C,toxicidad_hepatica,Chronic_QALY,0.043,0.028,0.058
 C,toxicidad_hepatica,Chronic_Cost,0,0,0
 C,toxicidad_osea,Immediate_Death,0,0,0
 C,toxicidad_osea,Immediate_Change,0,0,0
-C,toxicidad_osea,Immediate_QALY,0.043,0.028,0.058
-C,toxicidad_osea,Immediate_Cost,899080.8853,358450.6168,1813363.367
+C,toxicidad_osea,Immediate_QALY,0.026,0.017,0.027
+C,toxicidad_osea,Immediate_Cost,0,0,0
 C,toxicidad_osea,Chronic_Death,0,0,0
 C,toxicidad_osea,Chronic_Change,0.7,0.7,0.7
 C,toxicidad_osea,Chronic_QALY,0.026,0.017,0.027
@@ -78,7 +78,7 @@ G,parto_prematuro,Immediate_Cost,1283213.209,827251.6894,2037247.64
 G,muerte_neonatal,Immediate_Death,0,0,0
 G,muerte_neonatal,Immediate_Change,0,0,0
 G,muerte_neonatal,Immediate_QALY,0,0,0
-G,muerte_neonatal,Immediate_Cost,189241.9662,154589.4801,227185.6974
+G,transmision_vih,Immediate_Cost,189241.9662,154589.4801,227185.6974
 G,transmision_vih,Immediate_Death,0,0,0
 G,transmision_vih,Immediate_Change,0,0,0
 G,transmision_vih,Immediate_QALY,0,0,0

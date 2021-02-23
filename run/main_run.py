@@ -27,6 +27,17 @@ treatment_list = {'ALL': list(lists['Treatment'].unique()),
                   'PREGNANT_LOCAL': list(lists[(lists['Pregnant'] == 1) & (lists['International_price'] == 0)][
                                              'Treatment'].unique()),
                   }
+m = DistributionModel()
+tuple_list = list()
+for x in treatment_list['ALL']:
+    group = lists[lists['Treatment'] == x]['Group'].unique()[0]
+    tuple_list.append((x, group, n_iterations, inflation_rates['3.5']))
+print('Distribution model Calculations starting - Please hold the use of the computer until it finishes',
+      dt.datetime.now())
+with multiprocessing.Pool(processes=cores) as pool:
+    pool.starmap(m.parallel_simulation, tuple_list)
+del m
+
 m = Model()
 tuple_list = list()
 for x in treatment_list['ALL']:
@@ -40,16 +51,7 @@ print('Static parameters model Calculations starting - Please hold the use of th
 with multiprocessing.Pool(processes=cores) as pool:
     pool.starmap(m.parallel_simulation, tuple_list)
 
-m = DistributionModel()
-tuple_list = list()
-for x in treatment_list['ALL']:
-    group = lists[lists['Treatment'] == x]['Group'].unique()[0]
-    tuple_list.append((x, group, n_iterations, inflation_rates['3.5']))
-print('Distribution model Calculations starting - Please hold the use of the computer until it finishes',
-      dt.datetime.now())
-with multiprocessing.Pool(processes=cores) as pool:
-    pool.starmap(m.parallel_simulation, tuple_list)
-del m
+
 m = PregnancyModel()
 tuple_list = list()
 for x in treatment_list['PREGNANT']:
@@ -165,7 +167,7 @@ for treatments in ['PREGNANT', 'PREGNANT_LOCAL']:
     analysis.export_net_monetary_benefit(thresholds=thresholds)
     print(dt.datetime.now(), 'Generated net monetary benefit')
     analysis.generate_dispersion_graph()
-    print(dt.datetime.now(), print(dt.datetime.now(), 'Generated dispersion graph'))
+    print(dt.datetime.now(), 'Generated dispersion graph')
     if treatments == 'PREGNANT':
         print(dt.datetime.now())
         analysis.international_price_sensibility(min_price=27044, max_price=3000000, n_steps=25,
