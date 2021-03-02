@@ -467,7 +467,7 @@ class DataProcessing(object):
         # Histograms
         results = results[(results[discount_rate] == '3.5') | (results[discount_rate] == 3.5)][[
             medication_name, group, qaly, costs, acute_events, chronic_events, treatment, n_high_tests]]
-        results[treatment] = results[treatment]/12
+        results[treatment] = results[treatment]
         f, ax = plt.subplots(nrows=2, ncols=3, figsize=(45, 25), sharey=False, sharex=False)
         i = 0
         j = 0
